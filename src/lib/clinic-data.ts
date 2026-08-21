@@ -20,7 +20,22 @@ export type Patient = {
   risk: "Low" | "Medium" | "High";
 };
 
-export const doctors = [
+export type Doctor = {
+  name: string;
+  specialization: string;
+  patients: number;
+  rating: number;
+};
+
+export type PlanStep = {
+  step: string;
+  status: "Done" | "In progress" | "Scheduled" | "Planned";
+  cost: number;
+};
+
+export type ToothCondition = "healthy" | "treated" | "watch" | "issue";
+
+export const doctors: Doctor[] = [
   { name: "Dr. Sarah Mehta", specialization: "General Dentistry", patients: 128, rating: 4.9 },
   { name: "Dr. Rohan Verma", specialization: "Orthodontics", patients: 94, rating: 4.8 },
   { name: "Dr. Ayesha Khan", specialization: "Periodontics", patients: 76, rating: 4.9 },
@@ -61,7 +76,7 @@ export const treatmentMix = [
   { name: "Surgical", value: 16 },
 ];
 
-export const treatmentPlan = [
+export const treatmentPlan: PlanStep[] = [
   { step: "Diagnostic X-ray & charting", status: "Done", cost: 1200 },
   { step: "Deep cleaning (upper arch)", status: "Done", cost: 3500 },
   { step: "Composite filling — tooth 26", status: "In progress", cost: 4200 },
@@ -77,7 +92,7 @@ export const quadrants: { label: string; teeth: number[] }[] = [
   { label: "Lower Left", teeth: [31, 32, 33, 34, 35, 36, 37, 38] },
 ];
 
-export const toothConditions: Record<number, "healthy" | "treated" | "watch" | "issue"> = {
+export const toothConditions: Record<number, ToothCondition> = {
   16: "treated",
   26: "issue",
   36: "issue",
