@@ -1,12 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarClock, FileText, HeartPulse, Wallet, Download } from "lucide-react";
+import {
+  CalendarClock,
+  FileText,
+  HeartPulse,
+  Wallet,
+  Download,
+  NotebookPen,
+  ChevronRight,
+} from "lucide-react";
+import { toast } from "sonner";
 import { DashboardShell } from "@/components/clinic/DashboardShell";
 import { StatCard } from "@/components/clinic/StatCard";
 import { ToothChart } from "@/components/clinic/ToothChart";
+import { ClinicalNoteDialog } from "@/components/clinic/ClinicDialogs";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { formatINR, patients, treatmentPlan } from "@/lib/clinic-data";
+import { formatINR } from "@/lib/clinic-data";
+import { useClinic } from "@/lib/clinic-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/patient")({
@@ -44,25 +55,73 @@ const riskTone: Record<string, string> = {
 };
 
 function PatientPage() {
-  const patient = patients[2]!;
-  const done = treatmentPlan.filter((p) => p.status === "Done").length;
-  const progress = Math.round((done / treatmentPlan.length) * 100);
-  const total = treatmentPlan.reduce((sum, p) => sum + p.cost, 0);
+  const { activePatient, patients, plan, appointments, advancePlanStep, setActivePatient, notify } =
+    useClinic();
+
+  const done = plan.filter((p) => p.status === "Done").length;
+  const progress = Math.round((done / Math.max(plan.length, 1)) * 100);
+  const total = plan.reduce((sum, p) => sum + p.cost, 0);
+  const nextAppt = appointments.find((a) => a.patient === activePatient.name);
+
+  const exportChart = () => {
+    const lines = [
+      `Dental Club — chart export`,
+      `${activePatient.name} (${activePatient.id})`,
+      `Age ${activePatient.age} · ${activePatient.plan} · Risk ${activePatient.risk}`,
+      `Outstanding: ${formatINR(activePatient.balance)}`,
+      ``,
+      `Treatment plan:`,
+      ...plan.map((s, i) => `${i + 1}. ${s.step} — ${s.status} — ${formatINR(s.cost)}`),
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([lines], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activePatient.id}-chart.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Chart exported");
+  };
 
   return (
     <DashboardShell
-      title={patient.name}
-      subtitle={`${patient.id} · ${patient.age} yrs · ${patient.plan}`}
+      title={activePatient.name}
+      subtitle={`${activePatient.id} · ${activePatient.age} yrs · ${activePatient.plan}`}
       actions={
-        <Button variant="outline" className="gap-2">
-          <Download className="size-4" /> Export chart
-        </Button>
+        <div className="flex gap-2">
+          <ClinicalNoteDialog
+            patient={activePatient.name}
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <NotebookPen className="size-4" /> Add note
+              </Button>
+            }
+          />
+          <Button className="gap-2" onClick={exportChart}>
+            <Download className="size-4" /> Export chart
+          </Button>
+        </div>
       }
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Next visit" value="Today 11:00" hint="Gum therapy" icon={CalendarClock} />
-        <StatCard label="Plan progress" value={`${progress}%`} delta={20} hint="2 of 5 steps" icon={HeartPulse} />
-        <StatCard label="Outstanding" value={formatINR(patient.balance)} hint="due in 7 days" icon={Wallet} />
+        <StatCard
+          label="Next visit"
+          value={nextAppt ? `${nextAppt.date} ${nextAppt.time}` : activePatient.nextVisit}
+          hint={nextAppt?.treatment ?? "no treatment booked"}
+          icon={CalendarClock}
+        />
+        <StatCard
+          label="Plan progress"
+          value={`${progress}%`}
+          delta={20}
+          hint={`${done} of ${plan.length} steps`}
+          icon={HeartPulse}
+        />
+        <StatCard
+          label="Outstanding"
+          value={formatINR(activePatient.balance)}
+          hint="due in 7 days"
+          icon={Wallet}
+        />
         <StatCard label="Records on file" value="14" hint="x-rays & notes" icon={FileText} />
       </div>
 
@@ -76,7 +135,7 @@ function PatientPage() {
           <p className="text-sm text-muted-foreground">Estimated total {formatINR(total)}</p>
           <Progress value={progress} className="mt-4" />
           <ol className="mt-5 space-y-4">
-            {treatmentPlan.map((step, i) => (
+            {plan.map((step, i) => (
               <li key={step.step} className="flex gap-3">
                 <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs text-muted-foreground">
                   {i + 1}
@@ -90,6 +149,19 @@ function PatientPage() {
                     <span className="text-xs text-muted-foreground">{formatINR(step.cost)}</span>
                   </div>
                 </div>
+                {step.status !== "Done" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Advance ${step.step}`}
+                    onClick={() => {
+                      advancePlanStep(i);
+                      toast.success(`"${step.step}" moved forward`);
+                    }}
+                  >
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </Button>
+                )}
               </li>
             ))}
           </ol>
@@ -99,7 +171,7 @@ function PatientPage() {
       <section className="surface-panel mt-6 overflow-hidden">
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-base">Patient roster</h2>
-          <p className="text-sm text-muted-foreground">Recently active records</p>
+          <p className="text-sm text-muted-foreground">Select a patient to open their chart</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] text-sm">
@@ -115,7 +187,17 @@ function PatientPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {patients.map((p) => (
-                <tr key={p.id} className="transition-colors hover:bg-accent/40">
+                <tr
+                  key={p.id}
+                  onClick={() => {
+                    setActivePatient(p.id);
+                    notify("Chart opened", `${p.name}'s record is now active.`);
+                  }}
+                  className={cn(
+                    "cursor-pointer transition-colors hover:bg-accent/40",
+                    p.id === activePatient.id && "bg-accent/30",
+                  )}
+                >
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <Avatar className="size-9 border border-border">
