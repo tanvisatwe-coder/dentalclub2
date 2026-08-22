@@ -1,4 +1,6 @@
-import { quadrants, toothConditions } from "@/lib/clinic-data";
+import { toast } from "sonner";
+import { quadrants } from "@/lib/clinic-data";
+import { useClinic } from "@/lib/clinic-store";
 import { cn } from "@/lib/utils";
 
 const styles: Record<string, string> = {
@@ -16,12 +18,16 @@ const legend = [
 ];
 
 export function ToothChart() {
+  const { teeth, cycleTooth } = useClinic();
+
   return (
     <div className="surface-panel p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base">Odontogram</h2>
-          <p className="text-sm text-muted-foreground">FDI notation · updated 18 Jul</p>
+          <p className="text-sm text-muted-foreground">
+            FDI notation · click a tooth to change its condition
+          </p>
         </div>
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
           {legend.map((l) => (
@@ -41,12 +47,16 @@ export function ToothChart() {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {q.teeth.map((t) => {
-                const condition = toothConditions[t] ?? "healthy";
+                const condition = teeth[t] ?? "healthy";
                 return (
                   <button
                     key={t}
                     type="button"
                     title={`Tooth ${t} — ${condition}`}
+                    onClick={() => {
+                      cycleTooth(t);
+                      toast.success(`Tooth ${t} charting updated`);
+                    }}
                     className={cn(
                       "size-9 rounded-md border text-xs font-medium transition-transform hover:scale-110",
                       styles[condition],
