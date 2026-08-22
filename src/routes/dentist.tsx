@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   CalendarCheck,
   IndianRupee,
@@ -23,7 +23,13 @@ import { StatCard } from "@/components/clinic/StatCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { appointments, doctors, treatmentMix, weeklyVisits } from "@/lib/clinic-data";
+import { treatmentMix, weeklyVisits, formatINR } from "@/lib/clinic-data";
+import { useClinic } from "@/lib/clinic-store";
+import {
+  AddDoctorDialog,
+  AddPatientDialog,
+  BookAppointmentDialog,
+} from "@/components/clinic/ClinicDialogs";
 
 export const Route = createFileRoute("/dentist")({
   head: () => ({
@@ -61,21 +67,43 @@ const pieColors = [
 ];
 
 function DentistDashboard() {
+  const { appointments, doctors, patients, setActivePatient } = useClinic();
+  const navigate = useNavigate();
+  const todays = appointments.filter((a) => a.date === "Today");
+  const outstanding = patients.reduce((sum, p) => sum + p.balance, 0);
+  const utilisation = Math.min(
+    100,
+    Math.round((todays.filter((a) => a.status !== "Cancelled").length / 30) * 100),
+  );
+
   return (
     <DashboardShell
       title="Clinic Overview"
-      subtitle="Thursday, 20 August · 5 chairs · 3 clinicians on duty"
+      subtitle={`${todays.length} appointments today · 5 chairs · ${doctors.length} clinicians on duty`}
       actions={
-        <Button className="gap-2">
-          <Plus className="size-4" /> New appointment
-        </Button>
+        <div className="flex gap-2">
+          <AddPatientDialog
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <UserPlus className="size-4" /> New patient
+              </Button>
+            }
+          />
+          <BookAppointmentDialog
+            trigger={
+              <Button className="gap-2">
+                <Plus className="size-4" /> New appointment
+              </Button>
+            }
+          />
+        </div>
       }
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Appointments today" value="24" delta={12} hint="vs last Thursday" icon={CalendarCheck} />
-        <StatCard label="Revenue this week" value="₹3.89L" delta={8} hint="collected" icon={IndianRupee} />
-        <StatCard label="New patients" value="17" delta={-4} hint="this month" icon={UserPlus} />
-        <StatCard label="Chair utilisation" value="82%" delta={5} hint="avg. daily" icon={Activity} />
+        <StatCard label="Appointments today" value={String(todays.length)} delta={12} hint="live schedule" icon={CalendarCheck} />
+        <StatCard label="Outstanding balances" value={formatINR(outstanding)} delta={8} hint="across roster" icon={IndianRupee} />
+        <StatCard label="Patients on file" value={String(patients.length)} delta={-4} hint="active charts" icon={UserPlus} />
+        <StatCard label="Chair utilisation" value={`${utilisation}%`} delta={5} hint="today" icon={Activity} />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
@@ -197,8 +225,16 @@ function DentistDashboard() {
             </Button>
           </div>
           <ul className="divide-y divide-border">
-            {appointments.slice(0, 5).map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center gap-4 px-5 py-3.5">
+            {todays.slice(0, 5).map((a) => (
+              <li
+                key={a.id}
+                onClick={() => {
+                  const match = patients.find((p) => p.name === a.patient);
+                  if (match) setActivePatient(match.id);
+                  navigate({ to: "/patient" });
+                }}
+                className="flex cursor-pointer flex-wrap items-center gap-4 px-5 py-3.5 transition-colors hover:bg-accent/40"
+              >
                 <span className="w-14 font-display text-sm">{a.time}</span>
                 <Avatar className="size-9 border border-border">
                   <AvatarFallback className="bg-accent text-[0.7rem]">
@@ -223,7 +259,16 @@ function DentistDashboard() {
         </section>
 
         <section className="surface-panel p-5">
-          <h2 className="text-base">Clinicians on duty</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base">Clinicians on duty</h2>
+            <AddDoctorDialog
+              trigger={
+                <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
+                  <Plus className="size-4" /> Add
+                </Button>
+              }
+            />
+          </div>
           <ul className="mt-4 space-y-4">
             {doctors.map((d) => (
               <li key={d.name} className="flex items-center gap-3">
